@@ -1,4 +1,5 @@
 #include <Geode/Geode.hpp>
+#include <Geode/ui/Popup.hpp>
 #include <Geode/modify/MenuLayer.hpp>
 #include <Geode/modify/CCHttpClient.hpp>
 #include <Geode/utils/web.hpp>
@@ -62,7 +63,7 @@ protected:
             auto labelNode = CCLabelBMFont::create(label.c_str(), "goldFont.fnt");
             labelNode->setScale(0.5f);
             auto btn = CCMenuItemSpriteExtra::create(
-                labelNode, this, menu_selector(PostNewsPopup::onInsertTag)
+                labelNode, labelNode, this, menu_selector(PostNewsPopup::onInsertTag)
             );
             btn->setUserObject(CCString::create(tag));
             formatMenu->addChild(btn);
@@ -94,7 +95,7 @@ protected:
         // Submit Button
         auto submitBtnSpr = ButtonSprite::create("Publish", "goldFont.fnt", "GJ_button_01.png", 0.8f);
         auto submitBtn = CCMenuItemSpriteExtra::create(
-            submitBtnSpr, this, menu_selector(PostNewsPopup::onSubmit)
+            submitBtnSpr, submitBtnSpr, this, menu_selector(PostNewsPopup::onSubmit)
         );
         auto menu = CCMenu::create();
         menu->setPosition({winSize.width / 2, 30.f});
@@ -163,7 +164,7 @@ protected:
         // "+ Post News" Button
         auto postSpr = ButtonSprite::create("+ Post", "goldFont.fnt", "GJ_button_02.png", 0.7f);
         auto postBtn = CCMenuItemSpriteExtra::create(
-            postSpr, this, menu_selector(NewsPopup::onOpenPostDialog)
+            postSpr, postSpr, this, menu_selector(NewsPopup::onOpenPostDialog)
         );
         auto topMenu = CCMenu::create();
         topMenu->setPosition({winSize.width - 50.f, winSize.height - 25.f});
@@ -226,7 +227,7 @@ protected:
                 auto likeLabel = CCLabelBMFont::create(likeStr.c_str(), "goldFont.fnt");
                 likeLabel->setScale(0.4f);
                 auto likeBtn = CCMenuItemSpriteExtra::create(
-                    likeLabel, this, menu_selector(NewsPopup::onLikePost)
+                    likeLabel, likeLabel, this, menu_selector(NewsPopup::onLikePost)
                 );
                 likeBtn->setTag(static_cast<int>(postId));
                 likeBtn->setPosition({itemWidth - 110.f, 18.f});
@@ -237,7 +238,7 @@ protected:
                     auto commentLabel = CCLabelBMFont::create(" Comments", "bigFont.fnt");
                     commentLabel->setScale(0.35f);
                     auto commentBtn = CCMenuItemSpriteExtra::create(
-                        commentLabel, this, menu_selector(NewsPopup::onOpenComments)
+                        commentLabel, commentLabel, this, menu_selector(NewsPopup::onOpenComments)
                     );
                     commentBtn->setTag(levelId);
                     commentBtn->setPosition({itemWidth - 45.f, 18.f});
@@ -335,7 +336,7 @@ class $modify(MyMenuLayer, MenuLayer) {
         if (menu) {
             auto spr = CCSprite::createWithSpriteFrameName("GJ_chatBtn_001.png");
             auto btn = CCMenuItemSpriteExtra::create(
-                spr, this, menu_selector(MyMenuLayer::onNewsButton)
+                spr, spr, this, menu_selector(MyMenuLayer::onNewsButton)
             );
             btn->setID("gdps-news-btn"_spr);
             menu->addChild(btn);
