@@ -9,8 +9,8 @@ using namespace geode::prelude;
 // ==========================================
 // CONFIGURATION (CHANGE THESE TO MATCH YOUR SERVER)
 // ==========================================
-static const std::string SERVER_URL     = "http://your-gdps.com/api/news.php";
-static const std::string MOD_SECRET_KEY = "my_super_secret_gdps_key_123";
+static const std::string SERVER_URL     = "https://node.waifly.com:27243/api/news.php";
+static const std::string MOD_SECRET_KEY = "key123";
 
 static bool s_hasCheckedNewsOnStartup = false;
 
