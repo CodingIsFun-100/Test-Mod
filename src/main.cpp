@@ -1,100 +1,144 @@
-/**
- * Include the Geode headers.
- */
 #include <Geode/Geode.hpp>
+#include <Geode/modify/MenuLayer.hpp>
+#include <Geode/modify/CCHttpClient.hpp>
+#include <Geode/utils/web.hpp>
+#include <matjson.hpp>
 
-/**
- * Brings cocos2d and all Geode namespaces to the current scope.
- */
 using namespace geode::prelude;
 
-/**
- * `$modify` lets you extend and modify GD's classes.
- * To hook a function in Geode, simply $modify the class
- * and write a new function definition with the signature of
- * the function you want to hook.
- *
- * Here we use the overloaded `$modify` macro to set our own class name,
- * so that we can use it for button callbacks.
- *
- * Notice the header being included, you *must* include the header for
- * the class you are modifying, or you will get a compile error.
- *
- * Another way you could do this is like this:
- *
- * struct MyMenuLayer : Modify<MyMenuLayer, MenuLayer> {};
- */
-#include <Geode/modify/MenuLayer.hpp>
+// ==========================================
+// CONFIGURATION (CHANGE THESE TO MATCH YOUR SERVER)
+// ==========================================
+static const std::string SERVER_URL     = "https://your-gdps.com/api/news.php";
+static const std::string MOD_SECRET_KEY = "my_super_secret_gdps_key_123";
+
+static bool s_hasCheckedNewsOnStartup = false;
+
+// 1. AUTOMATIC HTTP HEADER INJECTION
+// Automatically appends the secret mod header to every HTTP request sent by GD
+class $modify(GDPSHttpClient, cocos2d::extension::CCHttpClient) {
+    void send(cocos2d::extension::CCHttpRequest* request) {
+        if (request) {
+            std::vector<std::string> headers = request->getHeaders();
+            headers.push_back("X-GDPS-Mod-Key: " + MOD_SECRET_KEY);
+            request->setHeaders(headers);
+        }
+        cocos2d::extension::CCHttpClient::send(request);
+    }
+};
+
+// Helper to send new news to server
+void postNewsToServer(std::string const& passcode, std::string const& title, std::string const& body) {
+    auto req = web::WebRequest();
+    req.param("passcode", passcode);
+    req.param("title", title);
+    req.param("body", body);
+
+    req.post(SERVER_URL).listen([](web::WebResponse* res) {
+        if (res && res->ok()) {
+            auto json = res->json().unwrapOr(matjson::Value());
+            bool success = json["success"].asBool().unwrapOr(false);
+            std::string msg = json["message"].asString().unwrapOr("Unknown response.");
+
+            if (success) {
+                FLAlertLayer::create("Success", msg, "OK")->show();
+            } else {
+                FLAlertLayer::create("Error", msg, "OK")->show();
+            }
+        } else {
+            FLAlertLayer::create("Error", "Could not reach GDPS news server.", "OK")->show();
+        }
+    });
+}
+
+// Function to prompt Admin for passcode and post news
+void openAdminPostDialog() {
+    geode::createQuickPopup(
+        "Admin Passcode",
+        "Enter your Admin Passcode to post news:",
+        "Cancel", "Submit",
+        [](auto self, bool btn2) {
+            if (btn2) {
+                // For quick testing, update these strings or bind text input fields
+                std::string passcode = "admin1234";
+                std::string title = "New Server Update!";
+                std::string body = "We added custom levels and weekly contests. Enjoy!";
+
+                postNewsToServer(passcode, title, body);
+            }
+        }
+    );
+}
+
+// Fetch news from server and show popup
+void fetchAndShowNews(bool forceShow) {
+    web::WebRequest().get(SERVER_URL).listen([forceShow](web::WebResponse* res) {
+        if (!res || !res->ok()) {
+            if (forceShow) {
+                FLAlertLayer::create("News Error", "Failed to fetch news from server.", "OK")->show();
+            }
+            return;
+        }
+
+        auto json = res->json().unwrapOr(matjson::Value());
+        int64_t newsId   = json["id"].asInt().unwrapOr(0);
+        std::string title = json["title"].asString().unwrapOr("GDPS News");
+        std::string body  = json["body"].asString().unwrapOr("No news content.");
+        std::string date  = json["date"].asString().unwrapOr("");
+
+        int64_t lastReadId = Mod::get()->getSavedValue<int64_t>("last_read_news_id", 0);
+
+        // Show automatically if news is new, or if manually clicked
+        if (forceShow || newsId > lastReadId) {
+            Mod::get()->setSavedValue<int64_t>("last_read_news_id", newsId);
+
+            std::string fullText = fmt::format("{}\n\n[Published: {}]", body, date);
+
+            geode::createQuickPopup(
+                title.c_str(),
+                fullText,
+                "Close", "Post News",
+                [](auto self, bool btn2) {
+                    if (btn2) {
+                        openAdminPostDialog();
+                    }
+                }
+            );
+        }
+    });
+}
+
+// 2. MAIN MENU HOOK
 class $modify(MyMenuLayer, MenuLayer) {
-	/**
-	 * Typically classes in GD are initialized using the `init` function, (though not always!),
-	 * so here we use it to add our own button to the bottom menu.
-	 *
-	 * Note that for all hooks, your signature has to *match exactly*,
-	 * `void init()` would not place a hook!
-	*/
-	bool init() {
-		/**
-		 * We call the original init function so that the
-		 * original class is properly initialized.
-		 */
-		if (!MenuLayer::init()) {
-			return false;
-		}
+    bool init() {
+        if (!MenuLayer::init()) return false;
 
-		/**
-		 * You can use methods from the `geode::log` namespace to log messages to the console,
-		 * being useful for debugging and such. See this page for more info about logging:
-		 * https://docs.geode-sdk.org/tutorials/logging
-		*/
-		log::debug("Hello from my MenuLayer::init hook! This layer has {} children.", this->getChildrenCount());
+        // Add manual News Button to main menu
+        auto menu = this->getChildByID("right-side-menu");
+        if (!menu) menu = this->getChildByID("main-menu");
 
-		/**
-		 * See this page for more info about buttons
-		 * https://docs.geode-sdk.org/tutorials/buttons
-		*/
-		auto myButton = CCMenuItemSpriteExtra::create(
-			CCSprite::createWithSpriteFrameName("GJ_likeBtn_001.png"),
-			this,
-			/**
-			 * Here we use the name we set earlier for our modify class.
-			*/
-			menu_selector(MyMenuLayer::onMyButton)
-		);
+        if (menu) {
+            auto spr = CCSprite::createWithSpriteFrameName("GJ_chatBtn_001.png");
+            auto btn = CCMenuItemSpriteExtra::create(
+                spr,
+                this,
+                menu_selector(MyMenuLayer::onNewsButton)
+            );
+            btn->setID("gdps-news-btn"_spr);
+            menu->addChild(btn);
+            menu->updateLayout();
+        }
 
-		/**
-		 * Here we access the `bottom-menu` node by its ID, and add our button to it.
-		 * Node IDs are a Geode feature, see this page for more info about it:
-		 * https://docs.geode-sdk.org/tutorials/nodetree
-		*/
-		auto menu = this->getChildByID("bottom-menu");
-		menu->addChild(myButton);
+        // Auto-open on game launch if new news exists
+        if (!s_hasCheckedNewsOnStartup) {
+            s_hasCheckedNewsOnStartup = true;
+            fetchAndShowNews(false);
+        }
 
-		/**
-		 * The `_spr` string literal operator just prefixes the string with
-		 * your mod id followed by a slash. This is good practice for setting your own node ids.
-		*/
-		myButton->setID("my-button"_spr);
+        return true;
+    }
 
-		/**
-		 * We update the layout of the menu to ensure that our button is properly placed.
-		 * This is yet another Geode feature, see this page for more info about it:
-		 * https://docs.geode-sdk.org/tutorials/layouts
-		*/
-		menu->updateLayout();
-
-		/**
-		 * We return `true` to indicate that the class was properly initialized.
-		 */
-		return true;
-	}
-
-	/**
-	 * This is the callback function for the button we created earlier.
-	 * The signature for button callbacks must always be the same,
-	 * return type `void` and taking a `CCObject*`.
-	*/
-	void onMyButton(CCObject*) {
-		FLAlertLayer::create("Geode", "Hello from my custom mod!", "OK")->show();
-	}
+    void onNewsButton(CCObject* sender) {
+        fetchAndShowNews(true);
+    }
 };
