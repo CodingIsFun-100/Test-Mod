@@ -9,7 +9,9 @@ using namespace geode::prelude;
 // ==========================================
 // CONFIGURATION (CHANGE THESE TO MATCH YOUR SERVER)
 // ==========================================
-static const std::string SERVER_URL     = "http://node.waifly.com:27243";
+// Change this to your exact HTTP address or local IP
+static const std::string SERVER_URL = "http://node.waifly.com:27243/api/news.php"; 
+// Example for local testing: "http://localhost/api/news.php" or "http://192.168.1.50/api/news.php"
 static const std::string MOD_SECRET_KEY = "key123";
 
 static bool s_hasCheckedNewsOnStartup = false;
