@@ -9,15 +9,12 @@ using namespace geode::prelude;
 // ==========================================
 // CONFIGURATION (CHANGE THESE TO MATCH YOUR SERVER)
 // ==========================================
-// Change this to your exact HTTP address or local IP
-static const std::string SERVER_URL = "http://node.waifly.com:27243/api/news.php"; 
-// Example for local testing: "http://localhost/api/news.php" or "http://192.168.1.50/api/news.php"
-static const std::string MOD_SECRET_KEY = "key123";
+static const std::string SERVER_URL     = "http://your-gdps.com/api/news.php";
+static const std::string MOD_SECRET_KEY = "my_super_secret_gdps_key_123";
 
 static bool s_hasCheckedNewsOnStartup = false;
 
 // 1. AUTOMATIC HTTP HEADER INJECTION
-// Automatically appends the secret mod header to every HTTP request sent by GD
 class $modify(GDPSHttpClient, cocos2d::extension::CCHttpClient) {
     void send(cocos2d::extension::CCHttpRequest* request) {
         if (request) {
@@ -36,21 +33,25 @@ void postNewsToServer(std::string const& passcode, std::string const& title, std
     req.param("title", title);
     req.param("body", body);
 
-    req.post(SERVER_URL).listen([](web::WebResponse* res) {
-        if (res && res->ok()) {
-            auto json = res->json().unwrapOr(matjson::Value());
-            bool success = json["success"].asBool().unwrapOr(false);
-            std::string msg = json["message"].asString().unwrapOr("Unknown response.");
+    // Geode v5+ Async Spawn API
+    async::spawn(
+        req.post(SERVER_URL),
+        [](web::WebResponse res) {
+            if (res.ok()) {
+                auto json = res.json().unwrapOr(matjson::Value());
+                bool success = json["success"].asBool().unwrapOr(false);
+                std::string msg = json["message"].asString().unwrapOr("Unknown response.");
 
-            if (success) {
-                FLAlertLayer::create("Success", msg, "OK")->show();
+                if (success) {
+                    FLAlertLayer::create("Success", msg.c_str(), "OK")->show();
+                } else {
+                    FLAlertLayer::create("Error", msg.c_str(), "OK")->show();
+                }
             } else {
-                FLAlertLayer::create("Error", msg, "OK")->show();
+                FLAlertLayer::create("Error", "Could not reach GDPS news server.", "OK")->show();
             }
-        } else {
-            FLAlertLayer::create("Error", "Could not reach GDPS news server.", "OK")->show();
         }
-    });
+    );
 }
 
 // Function to prompt Admin for passcode and post news
@@ -61,7 +62,6 @@ void openAdminPostDialog() {
         "Cancel", "Submit",
         [](auto self, bool btn2) {
             if (btn2) {
-                // For quick testing, update these strings or bind text input fields
                 std::string passcode = "admin1234";
                 std::string title = "New Server Update!";
                 std::string body = "We added custom levels and weekly contests. Enjoy!";
@@ -74,40 +74,44 @@ void openAdminPostDialog() {
 
 // Fetch news from server and show popup
 void fetchAndShowNews(bool forceShow) {
-    web::WebRequest().get(SERVER_URL).listen([forceShow](web::WebResponse* res) {
-        if (!res || !res->ok()) {
-            if (forceShow) {
-                FLAlertLayer::create("News Error", "Failed to fetch news from server.", "OK")->show();
-            }
-            return;
-        }
-
-        auto json = res->json().unwrapOr(matjson::Value());
-        int64_t newsId   = json["id"].asInt().unwrapOr(0);
-        std::string title = json["title"].asString().unwrapOr("GDPS News");
-        std::string body  = json["body"].asString().unwrapOr("No news content.");
-        std::string date  = json["date"].asString().unwrapOr("");
-
-        int64_t lastReadId = Mod::get()->getSavedValue<int64_t>("last_read_news_id", 0);
-
-        // Show automatically if news is new, or if manually clicked
-        if (forceShow || newsId > lastReadId) {
-            Mod::get()->setSavedValue<int64_t>("last_read_news_id", newsId);
-
-            std::string fullText = fmt::format("{}\n\n[Published: {}]", body, date);
-
-            geode::createQuickPopup(
-                title.c_str(),
-                fullText,
-                "Close", "Post News",
-                [](auto self, bool btn2) {
-                    if (btn2) {
-                        openAdminPostDialog();
-                    }
+    // Geode v5+ Async Spawn API
+    async::spawn(
+        web::WebRequest().get(SERVER_URL),
+        [forceShow](web::WebResponse res) {
+            if (!res.ok()) {
+                if (forceShow) {
+                    FLAlertLayer::create("News Error", "Failed to fetch news from server.", "OK")->show();
                 }
-            );
+                return;
+            }
+
+            auto json = res.json().unwrapOr(matjson::Value());
+            int64_t newsId    = json["id"].asInt().unwrapOr(0);
+            std::string title = json["title"].asString().unwrapOr("GDPS News");
+            std::string body  = json["body"].asString().unwrapOr("No news content.");
+            std::string date  = json["date"].asString().unwrapOr("");
+
+            int64_t lastReadId = Mod::get()->getSavedValue<int64_t>("last_read_news_id", 0);
+
+            // Show automatically if news is new, or if manually clicked
+            if (forceShow || newsId > lastReadId) {
+                Mod::get()->setSavedValue<int64_t>("last_read_news_id", newsId);
+
+                std::string fullText = fmt::format("{}\n\n[Published: {}]", body, date);
+
+                geode::createQuickPopup(
+                    title.c_str(),
+                    fullText,
+                    "Close", "Post News",
+                    [](auto self, bool btn2) {
+                        if (btn2) {
+                            openAdminPostDialog();
+                        }
+                    }
+                );
+            }
         }
-    });
+    );
 }
 
 // 2. MAIN MENU HOOK
